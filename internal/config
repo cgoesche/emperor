@@ -1,0 +1,13 @@
+[ "${_INTERNAL_CONFIG_EXPORTED}" == 1 ] && return 0
+
+function internal.config.import() {
+	_INTERNAL_CONFIG_EXPORTED="1"
+}
+
+internal.config.import
+
+function internal.config.check_dirs() {
+	[ ! -d "${EMPEROR_TEMP_DIR}" ] && mkdir -p "${EMPEROR_TEMP_DIR}"
+	[ ! -d "${EMPEROR_BUILD_DIR}" ] && mkdir -p "${EMPEROR_BUILD_DIR}"
+	[ ! -d "${EMPEROR_STATE_DIR}" ] && mkdir -p "${EMPEROR_STATE_DIR}"
+}

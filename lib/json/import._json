@@ -1,0 +1,8 @@
+[ "${_LIB_JSON_EXPORTED}" == 1 ] && return 0
+
+function lib.json.import() {
+	_LIB_JSON_EXPORTED="1"
+	source ${EMPEROR_SRC_DIR}/lib/json/json.lib
+}
+
+lib.json.import

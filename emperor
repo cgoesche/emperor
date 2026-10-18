@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+
+PROGRAM_INVOCATION_NAME="${0##*/}"
+PROGRAM_VERSION="0.1"
+EMPEROR_SRC_DIR="$(realpath -eq "$(dirname "${BASH_SOURCE[0]}" 2>/dev/null)" 2>/dev/null)"
+
+if [[ $? != 0 || -z "$EMPEROR_SRC_DIR" ]]; then
+	echo "$PROGRAM_INVOCATION_NAME: failed to find source root directory :(" >&2
+	exit 1
+fi
+
+# Import services, libraries and other utils
+source "${EMPEROR_SRC_DIR}/internal/import.internal"
+source "${EMPEROR_SRC_DIR}/cmd/import.cmd"
+
+function main() {
+	local exit_code
+	exit_code=0
+
+	internal.config.check_dirs
+
+	if [ "${#@}" == 0 ]; then
+		internal.logger.panic "insufficient arguments, see --help"
+	fi
+
+	cmd.root.main "$@"
+	exit_code=$?
+
+	return $exit_code
+}
+
+main "$@"

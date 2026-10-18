@@ -1,0 +1,8 @@
+[ "${_SERVICE_REALM_EXPORTED}" == 1 ] && return 0
+
+function service.realm.import() {
+	_SERVICE_REALM_EXPORTED="1"
+	source ${EMPEROR_SRC_DIR}/service/realm/realm.lib
+}
+
+service.realm.import

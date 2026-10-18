@@ -1,0 +1,9 @@
+[ "${_INTERNAL_LOGGER_EXPORTED}" == 1 ] && return 0
+
+function import() {
+	_INTERNAL_LOGGER_EXPORTED="1"
+	source ${EMPEROR_SRC_DIR}/internal/logger/variables
+	source ${EMPEROR_SRC_DIR}/internal/logger/logger 
+}
+
+import

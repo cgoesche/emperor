@@ -1,0 +1,17 @@
+function lib.utils.make_checksum_sha256() {
+	local file sum_file
+	file="$1"
+	sum_out="$2"
+
+	sha256sum "$file" >"$sum_out"
+	awk -F' ' '{print $1}' "$sum_out"
+	return $?
+}
+
+function lib.utils.verify_checksum_sha256() {
+	local sum_file
+	sum_file="$1"
+
+	sha256sum --quiet --check "$sum_file"
+	return $?
+}

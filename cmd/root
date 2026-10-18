@@ -1,0 +1,125 @@
+[ "${_CMD_ROOT_EXPORTED}" == 1 ] && return 0
+
+_CMD_ROOT_EXPORTED="1"
+
+function cmd.root.usage() {
+	cat <<EOF
+Usage:
+ ${PROGRAM_INVOCATION_NAME} commands... [options] argument...
+
+ A rudimentary container manager (for educational purposes)
+
+Commands:
+ create			create a realm, network or image
+ destroy		destroy a realm, network or image
+ info			get information on a realm, network
+			or image
+ list			list realms, networks or images
+ slumber		terminate a realm process
+
+Options:
+ -h, --help             display this help
+ -v, --version		show program version
+EOF
+}
+
+# If the first argument is not an option
+# we assume it is a command and try to match
+# it with any of our known ones. If a match
+# happens, we switch to the parsing logic of
+# that specific cmd.
+# @args: All command-line arguments
+function cmd.root.switch_command() {
+	local cmd
+	local -a args=("$@")
+
+	if [[ "${#args[@]}" == 0 || -z "${args[*]}" ]]; then
+		internal.logger.panic "${FUNCNAME[0]}(): empty @args parameter"
+	fi
+
+	cmd="${args[0]}"
+	case "$cmd" in
+	'create')
+		shift 1
+		cmd.create.parser "${@}"
+		return $?
+		;;
+	'destroy')
+		shift 1
+		cmd.destroy.parser "${@}"
+		return $?
+		;;
+	'info')
+		shift 1
+		cmd.info.parser "${@}"
+		return $?
+		;;
+	'list')
+		shift 1
+		cmd.list.parser "${@}"
+		return $?
+		;;
+	'slumber')
+		shift 1
+		cmd.slumber.parser "${@}"
+		return $?
+		;;
+	*)
+		internal.logger.panic "unknown command '${cmd}'"
+		;;
+	esac
+
+	return 0
+}
+
+# This is the command-line entry point
+# @args: Command-line options passed to emperor
+function cmd.root.main() {
+	local opts shortopts longopts rc
+	local -a args
+	args=("$@")
+	rc=0
+
+	shortopts="hv"
+	longopts="help,version"
+
+	# Lets see if we need to switch to a different command handler
+	if [[ ! "${args[0]}" =~ ^-.* ]]; then
+		cmd.root.switch_command "${args[@]}"
+		return $?
+	fi
+
+	opts="$(getopt -l "${longopts}" -o "${shortopts}" -n "${PROGRAM_INVOCATION_NAME}" -- "${args[@]}")"
+	[ "$?" != 0 ] && {
+		internal.logger.error "getopt(1) error"
+		return 1
+	}
+
+	eval set -- "$opts"
+
+	while true; do
+		case "$1" in
+		'-h' | '--help')
+			cmd.root.usage
+			rc=0
+			break
+			;;
+		'-v' | '--version')
+			echo "$PROGRAM_VERSION"
+			rc=0
+			break
+			;;
+		'--')
+			shift
+			break
+			;;
+		*)
+			echo "invalid option" >&2
+			rc=1
+			break
+			;;
+		esac
+	done
+
+	return $rc
+}

@@ -1,0 +1,16 @@
+[ "${_INTERNAL_VARIABLES_EXPORTED}" == 1 ] && return 0
+
+function internal.variables.import() {
+	_INTERNAL_VARIABLES_EXPORTED="1"
+	
+	declare -rg _LOCAL_SHARE="${HOME}/.local/share"
+
+	declare -rg EMPEROR_TEMP_DIR="${_LOCAL_SHARE}/tmp"
+	declare -rg EMPEROR_BUILD_DIR="${EMPEROR_TEMP_DIR}/build"
+	declare -rg EMPEROR_DATASTORE_DIR="${_LOCAL_SHARE}/emperor/store"
+	declare -rg EMPEROR_STATE_DIR="${XDG_RUNTIME_DIR}/emperor"
+	declare -rg EMPEROR_ASSETS_DIR="${EMPEROR_SRC_DIR}/assets"
+	declare -rg EMPEROR_MKOSI_DIR="${EMPEROR_ASSETS_DIR}/mkosi"
+}
+
+internal.variables.import

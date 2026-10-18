@@ -1,0 +1,4 @@
+function service.network.hello() {
+	echo "Hello"
+	return 0
+}

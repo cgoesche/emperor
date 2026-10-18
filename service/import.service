@@ -1,0 +1,8 @@
+function service.import() {
+	source ${EMPEROR_SRC_DIR}/service/image/import.image
+	source ${EMPEROR_SRC_DIR}/service/realm/import.realm
+	source ${EMPEROR_SRC_DIR}/service/network/import.network
+	source ${EMPEROR_SRC_DIR}/service/data/import.data
+}
+
+service.import

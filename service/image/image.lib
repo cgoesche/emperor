@@ -1,0 +1,215 @@
+source "${EMPEROR_SRC_DIR}/internal/logger/import.logger"
+source "${EMPEROR_SRC_DIR}/lib/json/import._json"
+source "${EMPEROR_SRC_DIR}/lib/uuid/import.uuid"
+source "${EMPEROR_SRC_DIR}/lib/image/import.image"
+source "${EMPEROR_SRC_DIR}/lib/utils/import.utils"
+
+function service.image.init() {
+	local uuid
+
+	declare -Ag IMAGE
+	IMAGE=(
+		[UUID]=""
+		[DISTRO]=""
+		[RELEASE]=""
+		[NAME]=""
+		[CTIME]=""
+		[CHECKSUM_FILE]=""
+		[HASH]=""
+		[IMAGE_DIR]=""
+		[IMAGE_FILE]=""
+	)
+
+	IMAGE[UUID]="$(lib.uuid.generate)"
+	if [ -z "${IMAGE[UUID]}" ]; then
+		internal.logger.panic "${FUNCNAME[0]}: failed to generate UUID for new image"
+	fi
+	IMAGE[IMAGE_DIR]="${EMPEROR_IMAGESTORE_DIR}/${IMAGE[UUID]}"
+
+	return 0
+}
+
+function service.image.build_prepare() {
+	local image_dir
+
+	image_dir=""
+	# Check if a image with the same name already exists
+	image_dir="$(_service.image.get_image_dir_by_name_or_id "${IMAGE[NAME]}")"
+	if [ -n "$image_dir" ]; then
+		internal.logger.error "an image with name '${IMAGE[NAME]}' already exists"
+		return 1
+	fi
+
+	if ! _service.image.check_distro "${IMAGE[DISTRO]}" "${IMAGE[RELEASE]}"; then
+		return 1
+	fi
+
+	if ! mkdir -p "${IMAGE[IMAGE_DIR]}"; then
+		internal.logger.panic "${FUNCNAME[0]}: failed to create image directory for image '${IMAGE[UUID]}'"
+	fi
+	return 0
+}
+
+function service.image.build() {
+	local img ctime checksum
+
+	ctime="$(date +%Y-%m-%d_%H-%M-%S-%Z)"
+
+	if ! img="$(lib.image.build_new "${IMAGE[NAME]}" "${IMAGE[DISTRO]}" "${IMAGE[RELEASE]}" \
+		"${IMAGE[UUID]}" "${IMAGE[IMAGE_DIR]}")"; then
+		_service.image.clean_image_resources
+		return 1
+	fi
+
+	IMAGE[CTIME]="$ctime"
+	IMAGE[IMAGE_FILE]="$img"
+	IMAGE[CHECKSUM_FILE]="${IMAGE[IMAGE_DIR]}/${IMAGE[NAME]}.sha256"
+	if ! checksum=$(lib.utils.make_checksum_sha256 "${IMAGE[IMAGE_FILE]}" "${IMAGE[CHECKSUM_FILE]}"); then
+		internal.logger.error "failed to generate checksum for ${IMAGE[IMAGE_FILE]}"
+		return 1
+	fi
+	IMAGE[HASH]="$checksum"
+
+	return 0
+}
+
+function _service.image.clean_image_resources() {
+	if [ -d "${IMAGE[IMAGE_DIR]}" ]; then
+		rm -rf "${IMAGE[IMAGE_DIR]}"
+	fi
+	return 0
+}
+
+function _service.image.check_distro() {
+	local rc distro release
+	rc=0
+	distro="${IMAGE[DISTRO]}"
+	release="${IMAGE[RELEASE]}"
+
+	case "${distro}" in
+	'debian') ;&
+	'ubuntu') ;&
+	'fedora') ;;
+	*)
+		internal.logger.error "unknown distro '$distro'"
+		rc=1
+		;;
+	esac
+
+	return $rc
+}
+
+function service.image.prepare() {
+	local image_ref image_dir
+	image_ref="$1"
+
+	if [ -z "$image_ref" ]; then
+		internal.logger.error "${FUNCNAME[0]}: missing @image_ref param"
+		return 1
+	fi
+
+	if ! image_dir="$(_service.image.get_image_dir_by_name_or_id "$image_ref")"; then
+		internal.logger.info "could not find image with reference '$image_ref'"
+		return 1
+	fi
+
+	return 0
+}
+
+function _service.image.get_image_dir_by_name_or_id() {
+	local image_ref json_obj uuid rc
+	image_ref="$1"
+	json_obj=""
+	uuid=""
+
+	inv_path="$(_service.image.get_image_store_inventory_file)"
+
+	if json_obj=$(lib.json.get_object_from_val_in_key "$inv_path" "$image_ref" "name"); then
+		uuid="$(lib.json.get_key_value "$json_obj" "uuid")"
+	# image_ref might be a UUID instead
+	elif json_obj=$(lib.json.get_object_from_val_in_key "$inv_path" "$image_ref" "uuid"); then
+		uuid="$image_ref"
+	fi
+
+	if [ -z "$uuid" ]; then
+		return 1
+	fi
+
+	echo "${EMPEROR_IMAGESTORE_DIR}/${uuid}"
+	return 0
+}
+
+function _service.image.get_image_store_inventory_file() {
+	if ! _service.image.check_image_store_dir; then
+		return 1
+	fi
+
+	echo "${EMPEROR_IMAGESTORE_DIR}/${EMPEROR_IMAGE_INVENTORY_STATE_FILE}"
+
+	return 0
+}
+
+function _service.image.check_image_store_dir() {
+	local store_dir inv_file
+	store_dir="${EMPEROR_IMAGESTORE_DIR}"
+	inv_file="${EMPEROR_IMAGE_INVENTORY_STATE_FILE}"
+
+	# The image store might not exist and needs to be initialized again
+	if [[ ! -d "$store_dir" || ! -f "${store_dir}/${inv_file}" ]]; then
+		_service.image.init_image_store
+	fi
+	return 0
+}
+
+function _service.image.init_image_store() {
+	local rc=0 inv_file
+	inv_file="${EMPEROR_IMAGESTORE_DIR}/${EMPEROR_IMAGE_INVENTORY_STATE_FILE}"
+
+	if [ ! -d "${EMPEROR_IMAGESTORE_DIR}" ]; then
+		mkdir -p "${EMPEROR_IMAGESTORE_DIR}"
+		rc=$?
+	fi
+
+	touch "$inv_file"
+	rc=$?
+
+	if ! lib.json.write_empty "$inv_file"; then
+		rc=$?
+		internal.logger.error "${FUNCNAME[0]}: failed to create store inventory state file"
+	fi
+
+	if [ $rc != 0 ]; then
+		internal.logger.panic "${FUNCNAME[0]}: failed to init the image store"
+	fi
+	return $rc
+}
+
+function service.image.set_creation_time() {
+	IMAGE[CTIME]="$1"
+	return 0
+}
+
+function service.image.set_distro() {
+	IMAGE[DISTRO]="${1,,}"
+	return 0
+}
+
+function service.image.set_release() {
+	IMAGE[RELEASE]="$1"
+	return 0
+}
+
+function service.image.set_name() {
+	IMAGE[NAME]="$1"
+	return 0
+}
+
+function service.image.set_hash() {
+	IMAGE[HASH]="$1"
+	return 0
+}
+
+function service.image.set_image_dir_path() {
+	IMAGE[IMAGE_DIR]="$1"
+	return 0
+}

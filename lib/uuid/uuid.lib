@@ -1,0 +1,4 @@
+function lib.uuid.generate() {
+	uuidgen --time
+	return 0
+}

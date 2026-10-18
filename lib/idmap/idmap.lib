@@ -1,0 +1,49 @@
+function _lib.idmap.parse_subuid() {
+	local user="$1"
+
+	awk -F':' -v user="$user" '$1 == user { gsub(/:/, " "); print }' /etc/subuid
+	return $?
+}
+
+function _lib.idmap.parse_subgid() {
+	local user="$1"
+
+	awk -F':' -v user="$user" '$1 == user { gsub(/:/, " "); print }' /etc/subgid
+	return $?
+}
+
+function lib.idmap.get_subuid() {
+	local -a res
+	local user
+	user="$1"
+
+	res=($(_lib.idmap.parse_subuid "$user"))
+	echo "${res[1]}"
+}
+
+function lib.idmap.get_subuid_range() {
+	local -a res
+	local user
+	user="$1"
+
+	res=($(_lib.idmap.parse_subuid "$user"))
+	echo "${res[2]}"
+}
+
+function lib.idmap.get_subgid() {
+	local -a res
+	local user
+	user="$1"
+
+	res=($(_lib.idmap.parse_subgid "$user"))
+	echo "${res[1]}"
+}
+
+function lib.idmap.get_subgid_range() {
+	local -a res
+	local user
+	user="$1"
+
+	res=($(_lib.idmap.parse_subgid "$user"))
+	echo "${res[2]}"
+}

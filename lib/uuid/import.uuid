@@ -1,0 +1,8 @@
+[ "${_LIB_UUID_EXPORTED}" == 1 ] && return 0
+
+function import() {
+	_LIB_UUID_EXPORTED="1"
+	source ${EMPEROR_SRC_DIR}/lib/uuid/uuid.lib
+}
+
+import

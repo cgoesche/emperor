@@ -1,0 +1,238 @@
+source "${EMPEROR_SRC_DIR}/service/import.service"
+
+function _cmd.create.image.parser() {
+	local -a args="( "$@" )"
+	local opts shortopts longopts rc
+	rc=0
+	shortopts="+d:r:"
+	longopts="distro:,release:"
+
+	if (("${#args}" < 4)); then
+		internal.logger.panic "too few arguments"
+	fi
+
+	opts="$(getopt -l "${longopts}" -o "${shortopts}" -n "${PROGRAM_INVOCATION_NAME}" -- "${args[@]}")"
+	[ "$?" != 0 ] && {
+		internal.logger.error "getopt(1) error"
+		return 1
+	}
+
+	eval set -- "$opts"
+
+	while true; do
+		case "$1" in
+		'-d' | '--distro')
+			service.image.set_distro "$2"
+			shift 2
+			continue
+			;;
+		'--release')
+			service.image.set_release "$2"
+			shift 2
+			continue
+			;;
+		'--')
+			shift
+			break
+			;;
+		*)
+			echo "${FUNCNAME[0]}: invalid option" >&2
+			rc=1
+			break
+			;;
+		esac
+	done
+
+	# Accessing permutated arguments
+	args=("$@")
+
+	if ((${#args[@]} > 1)); then
+		internal.logger.panic "too many arguments"
+	elif ((${#args[@]} < 1)); then
+		internal.logger.panic "missing image name"
+	else
+		service.image.set_name "${args[0]}"
+	fi
+
+	return "$rc"
+}
+
+function _cmd.create.network.parser() {
+	return 0
+}
+
+function _cmd.create.realm.parser() {
+	local -a args="( "$@" )"
+	local opts shortopts longopts rc
+	rc=0
+	shortopts="+n:i:"
+	longopts="network:,egress-iface:,hostname::,image:,subnet-range:,gateway:,ip:,image:,exil"
+
+	opts="$(getopt -l "${longopts}" -o "${shortopts}" -n "${PROGRAM_INVOCATION_NAME}" -- "${args[@]}")"
+	[ "$?" != 0 ] && {
+		internal.logger.error "getopt(1) error"
+		return 1
+	}
+
+	eval set -- "$opts"
+
+	while true; do
+		case "$1" in
+		'-n' | '--network')
+			service.realm.set_network "$2"
+			shift 2
+			continue
+			;;
+		'--egress-iface')
+			service.realm.set_egress_iface "$2"
+			shift 2
+			continue
+			;;
+		'--hostname')
+			service.realm.set_hostname "$2"
+			shift 2
+			continue
+			;;
+		'--subnet-range')
+			service.realm.set_subnet_range "$2"
+			shift 2
+			continue
+			;;
+		'--gateway')
+			service.realm.set_gateway "$2"
+			shift 2
+			continue
+			;;
+		'--ip')
+			service.realm.set_ip "$2"
+			shift 2
+			continue
+			;;
+		'-i' | '--image')
+			service.realm.set_image "$2"
+			shift 2
+			continue
+			;;
+		'--exil')
+			service.realm.set_exil_mode "$2"
+			shift 2
+			continue
+			;;
+		'--')
+			shift
+			break
+			;;
+		*)
+			echo "${FUNCNAME[0]}: invalid option" >&2
+			rc=1
+			break
+			;;
+		esac
+	done
+
+	if [ -z "${REALM[IMAGE]}" ]; then
+		internal.logger.panic "no image specified"
+	fi
+
+	# Accessing permutated arguments
+	args=("$@")
+
+	if ((${#args[@]} < 1)); then
+		internal.logger.panic "missing container name"
+	elif ((${#args[@]} > 1)); then
+		service.realm.set_name "${args[0]}"
+		shift 1
+		service.realm.set_entrypoint_cmd "$*"
+	else
+		service.realm.set_name "${args[0]}"
+	fi
+
+	return "$rc"
+}
+
+function _cmd.create.realm.handler() {
+	local -a args=("$@")
+
+	service.realm.init
+
+	if ! _cmd.create.realm.parser "$@"; then
+		return $?
+	fi
+
+	service.realm.prepare
+	if ! service.image.prepare "${REALM[IMAGE]}"; then
+		internal.logger.error "Please build an image first, see 'emperor create image --help'"
+		return 1
+	fi
+
+	#echo "Realm:"
+	#for k in "${!REALM[@]}"; do
+	#	echo "$k: ${REALM[$k]}"
+	#done
+
+	return 0
+}
+
+function _cmd.create.image.handler() {
+	local -a args=("$@")
+
+	service.image.init
+
+	if ! _cmd.create.image.parser "$@"; then
+		return $?
+	fi
+
+	if ! service.image.build_prepare; then
+		internal.logger.error "failed to prepare image build"
+		return 1
+	fi
+
+	if ! service.image.build; then
+		internal.logger.error "failed to build image"
+		return 1
+	fi
+
+	if ! service.data.image_store_update_inventory; then
+		return 1
+	fi
+
+	echo "Image:"
+	for k in "${!IMAGE[@]}"; do
+		echo "$k: ${IMAGE[$k]}"
+	done
+
+	return 0
+}
+
+# Parses the command line for the create command
+# @args: command line arguments argv[argc - 1]
+function cmd.create.parser() {
+	local subcmd
+	local -a args=("$@")
+
+	if [[ "${#args[@]}" == 0 || -z "${args[*]}" ]]; then
+		internal.logger.panic "${FUNCNAME[0]}(): empty @args parameter"
+	fi
+
+	subcmd="${args[0]}"
+	case "$subcmd" in
+	'image')
+		shift 1
+		_cmd.create.image.handler "${@}"
+		return $?
+		;;
+	'network')
+		shift 1
+		_cmd.create.network.parser "${@}"
+		return $?
+		;;
+	'realm')
+		shift 1
+		_cmd.create.realm.handler "${@}"
+		return $?
+		;;
+	*)
+		internal.logger.panic "unknown 'create' subcommand '${subcmd}'"
+		;;
+	esac
+}

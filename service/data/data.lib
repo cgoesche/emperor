@@ -1,0 +1,42 @@
+source "${EMPEROR_SRC_DIR}/lib/json/import._json"
+source "${EMPEROR_SRC_DIR}/service/image/import.image"
+
+function service.data.image_store_update_inventory() {
+	local obj array old_inv new_inv
+	local uuid="${IMAGE[UUID]}"
+	local name="${IMAGE[NAME]}"
+	local distro="${IMAGE[DISTRO]}"
+	local release="${IMAGE[RELEASE]}"
+	local ctime="${IMAGE[CTIME]}"
+	local path="${IMAGE[IMAGE_FILE]}"
+	local hash="${IMAGE[HASH]}"
+	sum_file="${IMAGE[CHECKSUM_FILE]}"
+
+	old_inv="$(_service.image.get_image_store_inventory_file)"
+	new_inv="${EMPEROR_TEMP_DIR}/new_inventory.json"
+	touch "$new_inv"
+
+	# The inventory file has one top-level array only
+	array="."
+	obj="[{
+		\"uuid\": \"$uuid\",
+		\"name\": \"$name\",
+		\"distro\": \"$distro\",
+		\"release\": \"$release\",
+		\"ctime\": \"$ctime\",
+		\"path\": \"$path\",
+		\"hash\": \"$hash\",
+		\"checksum-file\": \"$sum_file\"
+	}]"
+
+	if ! lib.json.add_obj_to_array "$obj" "$array" "$old_inv" "$new_inv"; then
+		internal.logger.error "${FUNCNAME[0]}: failed to create new inventory file"
+		return 1
+	fi
+
+	if ! mv "$new_inv" "$old_inv"; then
+		internal.logger.error "${FUNCNAME[0]}: failed to update inventory"
+		return 1
+	fi
+	return 0
+}

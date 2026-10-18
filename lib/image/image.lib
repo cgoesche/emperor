@@ -1,0 +1,37 @@
+# @1: distribution
+# @2: release
+# @3: image uuid
+# @4: full path to output directory
+#
+# Returns the full path to compressed image file
+function lib.image.build_new() {
+	local name uuid distro release
+	local out_path image_suffix
+
+	name="$1"
+	distro="$2"
+	release="$3"
+	uuid="$4"
+	out_path="$5"
+	image_suffix=".tar.zst"
+
+	if ! mkosi \
+		--distribution="$distro" \
+		--release="$release" \
+		--format=tar \
+		--compress-output=zstd \
+		--image-id="$uuid" \
+		--output="$name" \
+		--output-directory="$out_path" \
+		--checksum=yes \
+		--environment=KERNEL_INSTALL_BYPASS=0 \
+		--bootable=no \
+		--with-docs=yes \
+		--package=apt,dpkg,mount,iproute2,iputils-ping,procps,zstd \
+		build &>/dev/stderr; then
+		return 1
+	fi
+
+	echo "${out_path}/${name}${image_suffix}"
+	return 0
+}

@@ -1,0 +1,160 @@
+source "${EMPEROR_SRC_DIR}/lib/uuid/import.uuid"
+source "${EMPEROR_SRC_DIR}/lib/idmap/import.idmap"
+source "${EMPEROR_SRC_DIR}/lib/network/import.network"
+
+function service.realm.init() {
+	local uuid
+
+	declare -Ag REALM
+	REALM=(
+		[UUID]=""
+		[NAME]=""
+		[OWNER_USERNAME]="${USER}"
+		[OWNER_UID]="${UID}"
+		[SUBUID]=""
+		[SUBGID]=""
+		[SUBUID_RANGE]=""
+		[SUBGID_RANGE]=""
+		[HELPER_HOST_PID]=""
+		[HOST_PID]=""
+		[IMAGE]=""
+		[NETWORK]=""
+		[SUBNET_RANGE]=""
+		[IPv4]=""
+		[HOSTNAME]=""
+		[HOST_EGRESS_IFACE]=""
+		[EXIL_MODE]="0"
+		[ENTRYPOINT_CMD]=""
+	)
+
+	uuid=$(lib.uuid.generate)
+	REALM[UUID]="$uuid"
+
+	return 0
+}
+
+function service.realm.prepare() {
+	# First set the subuid/subgid mappings
+	service.realm.set_id_mappings
+	service.realm.set_hostname ""
+}
+
+function service.realm.set_id_mappings() {
+	service.realm.set_subuid
+	service.realm.set_subgid
+	service.realm.set_subuid_range
+	service.realm.set_subgid_range
+	return 0
+}
+
+function service.realm.set_subuid() {
+	REALM[SUBUID]="$(lib.idmap.get_subuid "${REALM[OWNER_USERNAME]}")"
+	return 0
+}
+
+function service.realm.set_subgid() {
+	REALM[SUBGID]="$(lib.idmap.get_subgid "${REALM[OWNER_USERNAME]}")"
+	return 0
+}
+
+function service.realm.set_subuid_range() {
+	REALM[SUBUID_RANGE]="$(lib.idmap.get_subuid_range "${REALM[OWNER_USERNAME]}")"
+	return 0
+}
+
+function service.realm.set_subgid_range() {
+	REALM[SUBGID_RANGE]="$(lib.idmap.get_subgid_range "${REALM[OWNER_USERNAME]}")"
+	return 0
+}
+
+function service.realm.set_name() {
+	local name="$1"
+
+	REALM[NAME]="$name"
+
+	return 0
+}
+
+function service.realm.set_entrypoint_cmd() {
+	local cmd="$1"
+
+	REALM[ENTRYPOINT_CMD]="$cmd"
+
+	return 0
+}
+
+function service.realm.set_hostname() {
+	local hostname="$1"
+
+	if [ -z "$hostname" ]; then
+		hostname=$(lib.network.get_hostname)
+	fi
+
+	REALM[HOSTNAME]="$hostname"
+
+	return 0
+
+}
+
+function service.realm.set_image() {
+	local image="$1"
+
+	REALM[IMAGE]="$image"
+
+	return 0
+
+}
+
+function service.realm.set_exil_mode() {
+	local mode="$1"
+
+	REALM[EXIL_MODE]="$mode"
+
+	return 0
+
+}
+
+function service.realm.set_network() {
+	local network="$1"
+
+	REALM[NETWORK]="$network"
+
+	return 0
+
+}
+
+function service.realm.set_egress_iface() {
+	local iface="$1"
+
+	REALM[HOST_EGRESS_IFACE]="$iface"
+
+	return 0
+
+}
+
+function service.realm.set_subnet_range() {
+	local net_range="$1"
+
+	REALM[SUBNET_RANGE]="$net_range"
+
+	return 0
+
+}
+
+function service.realm.set_ip() {
+	local ip="$1"
+
+	REALM[IPV4]="$ip"
+
+	return 0
+
+}
+
+function service.realm.set_gateway() {
+	local gw="$1"
+
+	REALM[GATEWAY]="$gw"
+
+	return 0
+
+}

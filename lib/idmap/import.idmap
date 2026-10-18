@@ -1,0 +1,8 @@
+[ "${_LIB_IDMAP_EXPORTED}" == 1 ] && return 0
+
+function lib.idmap.import() {
+	_LIB_IDMAP_EXPORTED="1"
+	source ${EMPEROR_SRC_DIR}/lib/idmap/idmap.lib
+}
+
+lib.idmap.import

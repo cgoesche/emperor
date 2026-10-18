@@ -1,0 +1,8 @@
+[ "${_LIB_UTILS_EXPORTED}" == 1 ] && return 0
+
+function lib.utils.import() {
+	_LIB_UTILS_EXPORTED="1"
+	source ${EMPEROR_SRC_DIR}/lib/utils/utils.lib
+}
+
+lib.utils.import

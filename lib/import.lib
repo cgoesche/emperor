@@ -1,0 +1,10 @@
+function lib.import() {
+	source ${EMPEROR_SRC_DIR}/lib/idmap/import.idmap
+	source ${EMPEROR_SRC_DIR}/lib/namespace/import.namespace
+	source ${EMPEROR_SRC_DIR}/lib/uuid/import.uuid
+	source ${EMPEROR_SRC_DIR}/lib/network/import.network
+	source ${EMPEROR_SRC_DIR}/lib/json/import._json
+	source ${EMPEROR_SRC_DIR}/lib/image/import.image
+}
+
+lib.import

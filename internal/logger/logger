@@ -1,0 +1,23 @@
+function _logger.log() {
+	local msg out
+	msg="$1"
+	out="$2"
+
+	echo "${PROGRAM_INVOCATION_NAME}: $msg" >>"$out"
+	return 0
+}
+
+function internal.logger.info() {
+	_logger.log "$*" "${LOGGER_DEFAULT_STDOUT}"
+	return 0
+}
+
+function internal.logger.error() {
+	_logger.log "$*" "${LOGGER_DEFAULT_STDERR}"
+	return 0
+}
+
+function internal.logger.panic() {
+	_logger.log "$*" "${LOGGER_DEFAULT_STDERR}"
+	exit 100
+}

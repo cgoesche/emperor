@@ -1,0 +1,8 @@
+[ "${_LIB_IMAGE_EXPORTED}" == 1 ] && return 0
+
+function lib.image.import() {
+	_LIB_IMAGE_EXPORTED="1"
+	source ${EMPEROR_SRC_DIR}/lib/image/image.lib
+}
+
+lib.image.import

@@ -1,0 +1,55 @@
+function lib.json.write_empty() {
+	local file="$1"
+
+	if [ -z "$file" ]; then
+		return 1
+	fi
+
+	jq -n '[]' >"$file"
+	return $?
+}
+
+function lib.json.get_object_from_val_in_key() {
+	local file val key res
+	file="$1"
+	val="$2"
+	key="$3"
+
+	res="$(jq --arg k "$key" --arg v "$val" 'first(.[] | select(.[$k] == $v))' "$file")"
+	if [ -z "$res" ]; then
+		return 1
+	fi
+
+	echo "$res"
+	return 0
+}
+
+function lib.json.get_key_value() {
+	local obj key val
+	obj="$1"
+	key="$2"
+
+	if ! val="$(jq --exit-status --raw-output --arg k "$key" '.[$k]' <<<"$obj")"; then
+		return $?
+	fi
+
+	echo "$val"
+	return 0
+}
+
+function lib.json.add_obj_to_array() {
+	local obj arr orig target
+	obj="$1"
+	arr="$2"
+	orig="$3"
+	target="$4"
+
+	# File is top-level array to add to
+	if [ "$arr" = "." ]; then
+		jq --argjson obj "$obj" '. += $obj' "$orig" >"$target"
+	else
+		# Add to a nested array
+		jq --arg arr "$arr" --argjson obj "$obj" '.[$arr] += $obj' "$orig" >"$target"
+	fi
+	return $?
+}
