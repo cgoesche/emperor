@@ -1,0 +1,29 @@
+function lib.namespace.unshare_run() {
+	unshare "$@"
+	return $?
+}
+
+function lib.namespace.unshare_child() {
+	local pid i
+
+	# Namespace children always run in the background, detached from our stdio
+	# TODO: Redirect helper output to a log file
+	unshare "$@" </dev/null >/dev/null 2>&1 &
+	pid=$!
+
+	# Wait until unshare has exec'd the target command (up to ~2s)
+	for ((i = 0; i < 200; i++)); do
+		kill -0 "$pid" 2>/dev/null || return 1
+		[[ "$(tr '\0' ' ' <"/proc/$pid/cmdline" 2>/dev/null)" != unshare* ]] && break
+		sleep 0.01
+	done
+
+	getino -p "$pid"
+}
+
+function lib.namespace.nsenter_exec() {
+	local -a args
+	args=("$@")
+
+	exec nsenter "${args[@]}"
+}

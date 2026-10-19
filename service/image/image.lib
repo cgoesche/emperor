@@ -80,6 +80,10 @@ function _service.image.clean_image_resources() {
 	return 0
 }
 
+# TODO: Maybe this is not even needed ? lib.image handles the
+# image creation and will just error out if the arguments are
+# invalid, so we shouldnt be too smart about what the user
+# wants.
 function _service.image.check_distro() {
 	local rc distro release
 	rc=0
@@ -99,38 +103,45 @@ function _service.image.check_distro() {
 	return $rc
 }
 
-function service.image.prepare() {
-	local image_ref image_dir
-	image_ref="$1"
+# This function will extract the image and make it available for the realm
+# returns the extracted images root directory
+function service.image.prepare_image_fs() {
+	local uuid dcomp_dir image_path
+	local uid_map gid_map
+	uuid="$1"
+	uid="$2"
+	uid_map="$3"
+	gid_map="$4"
+	gid="$uid"
+	image_path="$(service.image.ref_to_key_val "$uuid" "path")"
 
-	if [ -z "$image_ref" ]; then
-		internal.logger.error "${FUNCNAME[0]}: missing @image_ref param"
+	dcomp_dir="${EMPEROR_IMAGES_FS_DIR}/${uuid}/${EMPEROR_IMAGE_DEFAULT_ROOTFS_DIRNAME}"
+	if [ ! -d "$dcomp_dir" ] && ! mkdir -p "$dcomp_dir"; then
+		internal.logger.error "${FUNCNAME[0]}: failed to create image root dir"
 		return 1
 	fi
 
-	if ! image_dir="$(_service.image.get_image_dir_by_name_or_id "$image_ref")"; then
-		internal.logger.info "could not find image with reference '$image_ref'"
+	if ! lib.image.idmapped_decompress_image "$image_path" "$dcomp_dir" "$uid" "$gid" "$uid_map" "$gid_map"; then
+		internal.logger.error "${FUNCNAME[0]}: failed to decompress '$image_path' to '$dcomp_dir'"
 		return 1
 	fi
 
+	echo "$dcomp_dir"
 	return 0
 }
 
 function _service.image.get_image_dir_by_name_or_id() {
-	local image_ref json_obj uuid rc
+	local image_ref entry uuid rc
 	image_ref="$1"
-	json_obj=""
-	uuid=""
 
+	# TODO: The function panics but might just kill the subshell only
 	inv_path="$(_service.image.get_image_store_inventory_file)"
 
-	if json_obj=$(lib.json.get_object_from_val_in_key "$inv_path" "$image_ref" "name"); then
-		uuid="$(lib.json.get_key_value "$json_obj" "uuid")"
-	# image_ref might be a UUID instead
-	elif json_obj=$(lib.json.get_object_from_val_in_key "$inv_path" "$image_ref" "uuid"); then
-		uuid="$image_ref"
+	if ! entry="$(_service.image.get_inventory_entry "$inv_path" "$image_ref")"; then
+		return 1
 	fi
 
+	uuid="$(_service.image.get_key_val_from_image_entry "$entry" "uuid")"
 	if [ -z "$uuid" ]; then
 		return 1
 	fi
@@ -139,12 +150,58 @@ function _service.image.get_image_dir_by_name_or_id() {
 	return 0
 }
 
+function _service.image.get_inventory_entry() {
+	local inv ref entry
+	inv="$1"
+	ref="$2"
+
+	if ! entry=$(lib.json.get_object_from_val_in_key "$inv" "$ref" "name"); then
+		if ! entry=$(lib.json.get_object_from_val_in_key "$inv" "$ref" "uuid"); then
+			return 1
+		fi
+	fi
+
+	echo "$entry"
+	return 0
+}
+
+function _service.image.get_key_val_from_image_entry() {
+	local entry key val
+	entry="$1"
+	key="$2"
+
+	val="$(lib.json.get_key_value "$entry" "$key")"
+	if [ -z "$val" ]; then
+		return 1
+	fi
+
+	echo "$val"
+	return 0
+}
+
+function service.image.ref_to_key_val() {
+	local ref key val inv entry
+	ref="$1"
+	key="$2"
+
+	inv="$(_service.image.get_image_store_inventory_file)"
+
+	if ! entry="$(_service.image.get_inventory_entry "$inv" "$ref")"; then
+		return 1
+	fi
+
+	val="$(lib.json.get_key_value "$entry" "$key")"
+	echo "$val"
+	return 0
+}
+
+# Image store
 function _service.image.get_image_store_inventory_file() {
 	if ! _service.image.check_image_store_dir; then
 		return 1
 	fi
 
-	echo "${EMPEROR_IMAGESTORE_DIR}/${EMPEROR_IMAGE_INVENTORY_STATE_FILE}"
+	echo "${EMPEROR_IMAGESTORE_DIR}/${EMPEROR_IMAGESTORE_INVENTORY_FILENAME}"
 
 	return 0
 }
@@ -152,7 +209,7 @@ function _service.image.get_image_store_inventory_file() {
 function _service.image.check_image_store_dir() {
 	local store_dir inv_file
 	store_dir="${EMPEROR_IMAGESTORE_DIR}"
-	inv_file="${EMPEROR_IMAGE_INVENTORY_STATE_FILE}"
+	inv_file="${EMPEROR_IMAGESTORE_INVENTORY_FILENAME}"
 
 	# The image store might not exist and needs to be initialized again
 	if [[ ! -d "$store_dir" || ! -f "${store_dir}/${inv_file}" ]]; then
@@ -163,7 +220,7 @@ function _service.image.check_image_store_dir() {
 
 function _service.image.init_image_store() {
 	local rc=0 inv_file
-	inv_file="${EMPEROR_IMAGESTORE_DIR}/${EMPEROR_IMAGE_INVENTORY_STATE_FILE}"
+	inv_file="${EMPEROR_IMAGESTORE_DIR}/${EMPEROR_IMAGESTORE_INVENTORY_FILENAME}"
 
 	if [ ! -d "${EMPEROR_IMAGESTORE_DIR}" ]; then
 		mkdir -p "${EMPEROR_IMAGESTORE_DIR}"
@@ -184,6 +241,7 @@ function _service.image.init_image_store() {
 	return $rc
 }
 
+# Setters
 function service.image.set_creation_time() {
 	IMAGE[CTIME]="$1"
 	return 0
@@ -211,5 +269,13 @@ function service.image.set_hash() {
 
 function service.image.set_image_dir_path() {
 	IMAGE[IMAGE_DIR]="$1"
+	return 0
+}
+
+# Misc
+function service.image.print_info() {
+	for k in "${!IMAGE[@]}"; do
+		echo "$k: ${IMAGE[$k]}"
+	done
 	return 0
 }

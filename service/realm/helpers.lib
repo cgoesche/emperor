@@ -1,0 +1,5 @@
+function service.realm.spawn_ns_helper() {
+	local -a args
+	args=("$@")
+	lib.namespace.unshare_child "${args[@]}" sleep infinity
+}

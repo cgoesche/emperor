@@ -2,7 +2,6 @@
 
 function service.image.import() {
 	_SERVICE_IMAGE_EXPORTED="1"
-	source ${EMPEROR_SRC_DIR}/service/image/variables
 	source ${EMPEROR_SRC_DIR}/service/image/image.lib
 }
 

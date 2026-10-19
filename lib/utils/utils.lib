@@ -15,3 +15,11 @@ function lib.utils.verify_checksum_sha256() {
 	sha256sum --quiet --check "$sum_file"
 	return $?
 }
+
+function lib.utils.get_boottime_secs() {
+	awk -F '.' '{print $1}' /proc/uptime
+}
+
+function lib.utils.get_monotonic_secs() {
+	python3 -c 'import time; print(int(time.clock_gettime(time.CLOCK_MONOTONIC)))'
+}

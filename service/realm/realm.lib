@@ -1,6 +1,7 @@
 source "${EMPEROR_SRC_DIR}/lib/uuid/import.uuid"
 source "${EMPEROR_SRC_DIR}/lib/idmap/import.idmap"
 source "${EMPEROR_SRC_DIR}/lib/network/import.network"
+source "${EMPEROR_SRC_DIR}/lib/image/import.image"
 
 function service.realm.init() {
 	local uuid
@@ -9,6 +10,7 @@ function service.realm.init() {
 	REALM=(
 		[UUID]=""
 		[NAME]=""
+		[STATUS]=""
 		[OWNER_USERNAME]="${USER}"
 		[OWNER_UID]="${UID}"
 		[SUBUID]=""
@@ -17,7 +19,15 @@ function service.realm.init() {
 		[SUBGID_RANGE]=""
 		[HELPER_HOST_PID]=""
 		[HOST_PID]=""
-		[IMAGE]=""
+		[IMAGE_REF]=""
+		[IMAGE_NAME]=""
+		[IMAGE_UUID]=""
+		[IMAGE_PATH]=""
+		[OVERLAY_LOWER]=""
+		[OVERLAY_UPPER]=""
+		[OVERLAY_WORK]=""
+		[OVERLAY_MERGED]=""
+		[MOUNT_OPTS]="userxattr"
 		[NETWORK]=""
 		[SUBNET_RANGE]=""
 		[IPv4]=""
@@ -34,52 +44,152 @@ function service.realm.init() {
 }
 
 function service.realm.prepare() {
-	# First set the subuid/subgid mappings
-	service.realm.set_id_mappings
-	service.realm.set_hostname ""
-}
+	local overlay_lower
 
-function service.realm.set_id_mappings() {
-	service.realm.set_subuid
-	service.realm.set_subgid
-	service.realm.set_subuid_range
-	service.realm.set_subgid_range
+	# TODO: Create constants for the strings, REALM_VAR_STATUS_*
+	service.realm.set_status "preparing"
+	# First set the subuid/subgid mappings
+	_service.realm.set_id_mappings
+	service.realm.set_hostname ""
+
+	if ! _service.realm.create_fs_dir "${REALM[UUID]}"; then
+		internal.logger.error "${FUNCNAME[0]}: failed to create fs dir for realm"
+		return 1
+	fi
+
+	if ! overlay_lower="$(
+		service.image.prepare_image_fs \
+			"${REALM[IMAGE_UUID]}" \
+			"${REALM[OWNER_UID]}" \
+			"1:${REALM[SUBUID]}:${REALM[SUBUID_RANGE]}" \
+			"1:${REALM[SUBGID]}:${REALM[SUBGID_RANGE]}"
+	)"; then
+
+		internal.logger.error "${FUNCNAME[0]}: failed to prepare image base filesystem"
+		return 1
+	fi
+	service.realm.set_overlay_lower "$overlay_lower"
+
+	container_fs_dir="${EMPEROR_REALMS_FS_DIR}/${REALM[UUID]}"
+
+	local overlay_upper overlay_work overlay_merged
+	overlay_upper="${container_fs_dir}/upper"
+	overlay_work="${container_fs_dir}/work"
+	overlay_merged="${container_fs_dir}/merged"
+	if ! mkdir -p "$overlay_upper" "$overlay_work" "$overlay_merged"; then
+		internal.logger.error "${FUNCNAME[0]}: failed to prepare containers overlay directories"
+		return 1
+	fi
+
+	service.realm.set_overlay_upper "$overlay_upper"
+	service.realm.set_overlay_work "$overlay_work"
+	service.realm.set_overlay_merged "$overlay_merged"
+
+	# Update state
+	service.realm.update_state "${REALM[UUID]}"
+
 	return 0
 }
 
-function service.realm.set_subuid() {
+function service.realm.stage() {
+	service.realm.set_status "staging"
+	service.realm.update_state "${REALM[UUID]}"
+	
+	# We will unshare the network namespace as well, so
+	# a transient helper is needed to setup the network
+	# tap device that tunnels us to the host egress.
+	service.network.setup_realm_helper
+
+	return 0
+}
+
+function service.realm.invade () {
+	local -a args
+	local target_pid
+	target_pid="$(service.realm.get_helper_pid)"
+	
+	IFS=, read -ra names <<<"$EMPEROR_WHITELIST_ENV"
+	for n in "${names[@]}"; do
+		envs+=("$n=${!n}")
+	done
+	service.realm.make_env_dump
+	envs+=("REALM_DUMP=$REALM_DUMP")
+
+	# Reset the boottime and monotonic clocks
+	# This will set the offsets in /proc/self/timens_offsets
+	boot_secs="$(lib.utils.get_boottime_secs)"
+	mono_secs="$(lib.utils.get_monotonic_secs)"
+
+	args=(--target "${target_pid}" --user\
+		--net -- \
+		env "${envs[@]}" \
+		unshare --whitelist-env "$EMPEROR_WHITELIST_ENV" \
+		--boottime -$boot_secs\
+		--monotonic -$mono_secs\
+		--mount \
+		--pid \
+		--keep-caps \
+		--mount-proc \
+		--uts \
+		--time \
+		--kill-child \
+		--fork \
+		"$EMPEROR_DEFAULT_REALM_SETUP_SCRIPT" )
+
+	lib.namespace.nsenter_exec "${args[@]}"
+
+	return 0
+}
+
+function _service.realm.create_fs_dir() {
+	local fs_dir uuid
+	uuid="$1"
+
+	fs_dir="${EMPEROR_REALMS_FS_DIR}/${uuid}"
+	[ ! -d "$fs_dir" ] && mkdir -p "$fs_dir"
+	return $?
+}
+
+function _service.realm.set_id_mappings() {
+	_service.realm.set_subuid
+	_service.realm.set_subgid
+	_service.realm.set_subuid_range
+	_service.realm.set_subgid_range
+	return 0
+}
+
+function _service.realm.set_subuid() {
 	REALM[SUBUID]="$(lib.idmap.get_subuid "${REALM[OWNER_USERNAME]}")"
 	return 0
 }
 
-function service.realm.set_subgid() {
+function _service.realm.set_subgid() {
 	REALM[SUBGID]="$(lib.idmap.get_subgid "${REALM[OWNER_USERNAME]}")"
 	return 0
 }
 
-function service.realm.set_subuid_range() {
+function _service.realm.set_subuid_range() {
 	REALM[SUBUID_RANGE]="$(lib.idmap.get_subuid_range "${REALM[OWNER_USERNAME]}")"
 	return 0
 }
 
-function service.realm.set_subgid_range() {
+function _service.realm.set_subgid_range() {
 	REALM[SUBGID_RANGE]="$(lib.idmap.get_subgid_range "${REALM[OWNER_USERNAME]}")"
 	return 0
 }
 
 function service.realm.set_name() {
-	local name="$1"
+	REALM[NAME]="$1"
+	return 0
+}
 
-	REALM[NAME]="$name"
-
+function service.realm.set_status() {
+	REALM[STATUS]="$1"
 	return 0
 }
 
 function service.realm.set_entrypoint_cmd() {
-	local cmd="$1"
-
-	REALM[ENTRYPOINT_CMD]="$cmd"
-
+	REALM[ENTRYPOINT_CMD]="$1"
 	return 0
 }
 
@@ -91,70 +201,100 @@ function service.realm.set_hostname() {
 	fi
 
 	REALM[HOSTNAME]="$hostname"
-
 	return 0
-
 }
 
-function service.realm.set_image() {
-	local image="$1"
-
-	REALM[IMAGE]="$image"
-
+function service.realm.set_image_ref() {
+	REALM[IMAGE_REF]="$1"
 	return 0
+}
 
+function service.realm.set_image_name() {
+	REALM[IMAGE_NAME]="$1"
+	return 0
+}
+
+function service.realm.set_image_uuid() {
+	REALM[IMAGE_UUID]="$1"
+	return 0
+}
+
+function service.realm.set_image_path() {
+	REALM[IMAGE_PATH]="$1"
+	return 0
 }
 
 function service.realm.set_exil_mode() {
-	local mode="$1"
-
-	REALM[EXIL_MODE]="$mode"
-
+	REALM[EXIL_MODE]="$1"
 	return 0
-
 }
 
 function service.realm.set_network() {
-	local network="$1"
-
-	REALM[NETWORK]="$network"
-
+	REALM[NETWORK]="$1"
 	return 0
-
 }
 
 function service.realm.set_egress_iface() {
-	local iface="$1"
-
-	REALM[HOST_EGRESS_IFACE]="$iface"
-
+	REALM[HOST_EGRESS_IFACE]="$1"
 	return 0
-
 }
 
 function service.realm.set_subnet_range() {
-	local net_range="$1"
-
-	REALM[SUBNET_RANGE]="$net_range"
-
+	REALM[SUBNET_RANGE]="$1"
 	return 0
-
 }
 
 function service.realm.set_ip() {
-	local ip="$1"
-
-	REALM[IPV4]="$ip"
-
+	REALM[IPV4]="$1"
 	return 0
-
 }
 
 function service.realm.set_gateway() {
-	local gw="$1"
-
-	REALM[GATEWAY]="$gw"
-
+	REALM[GATEWAY]="$1"
 	return 0
+}
 
+function service.realm.set_overlay_lower() {
+	REALM[OVERLAY_LOWER]="$1"
+	return 0
+}
+
+function service.realm.set_overlay_upper() {
+	REALM[OVERLAY_UPPER]="$1"
+	return 0
+}
+
+function service.realm.set_overlay_work() {
+	REALM[OVERLAY_WORK]="$1"
+	return 0
+}
+
+function service.realm.set_overlay_merged() {
+	REALM[OVERLAY_MERGED]="$1"
+	return 0
+}
+
+function service.realm.print_info() {
+	echo "Realm:"
+	for k in "${!REALM[@]}"; do
+		echo "$k: ${REALM[$k]}"
+	done
+	return 0
+}
+
+function service.realm.set_helper_pid() {
+	REALM[HELPER_HOST_PID]="$1"
+	return 0
+}
+
+# Getters
+function service.realm.get_helper_pid() {
+	# PIDs are stored in the format PID:inode
+	printf "%d\n" "${REALM[HELPER_HOST_PID]%%:*}"
+}
+
+# Misc
+function service.realm.make_env_dump() {
+	declare -gx REALM_DUMP
+	REALM_DUMP="$(declare -p REALM)"
 }

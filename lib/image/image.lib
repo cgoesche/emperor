@@ -1,12 +1,19 @@
+source "${EMPEROR_SRC_DIR}/lib/namespace/import.namespace"
+
 # @1: distribution
 # @2: release
 # @3: image uuid
 # @4: full path to output directory
 #
 # Returns the full path to compressed image file
+# NOTE: We might have to let users specify a list of
+# desired packages too.
+# TODO: Make this function wrap private infrastructure
+# functions. Later we will let users decide what type of
+# backend they wish to use. For now only mkosi is supported.
 function lib.image.build_new() {
 	local name uuid distro release
-	local out_path image_suffix
+	local out_path image_suffix pkgs
 
 	name="$1"
 	distro="$2"
@@ -14,6 +21,7 @@ function lib.image.build_new() {
 	uuid="$4"
 	out_path="$5"
 	image_suffix=".tar.zst"
+	pkgs="apt,dpkg,mount,iproute2,iputils-ping,procps,zstd"
 
 	if ! mkosi \
 		--distribution="$distro" \
@@ -27,11 +35,32 @@ function lib.image.build_new() {
 		--environment=KERNEL_INSTALL_BYPASS=0 \
 		--bootable=no \
 		--with-docs=yes \
-		--package=apt,dpkg,mount,iproute2,iputils-ping,procps,zstd \
+		--package="$pkgs" \
 		build &>/dev/stderr; then
 		return 1
 	fi
 
 	echo "${out_path}/${name}${image_suffix}"
 	return 0
+}
+
+function lib.image.idmapped_decompress_image() {
+	local image out_dir
+	local uid gid uid_map gid_map
+	# I hate this, omg my eyes
+	image="$1"
+	out_dir="$2"
+	uid="$3"
+	gid="$4"
+	uid_map="$5"
+	gid_map="$6"
+
+	lib.namespace.unshare_run --user \
+		--map-users=0:"${uid}":1 \
+		--map-users="${uid_map}" \
+		--map-groups=0:"${gid}":1 \
+		--map-groups="${gid_map}" \
+		-- tar --zstd -xf "$image" -C "$out_dir" --numeric-owner
+
+	return $?
 }

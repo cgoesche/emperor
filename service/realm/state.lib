@@ -1,0 +1,107 @@
+function service.realm.update_state() {
+	local state_file uuid new_state
+	uuid="$1"
+
+	state_dir="${EMPEROR_REALMS_STATE_DIR}/${uuid}"
+	state_file="${state_dir}/${EMPEROR_DEFAULT_REALM_STATE_FILENAME}"
+	if [[ ! -d "$state_dir" || ! -f "$state_file" ]]; then
+		if ! _service.realm.init_state "$state_file" "$state_dir"; then
+			return 1
+		fi
+	fi
+
+	new_state="$(_service.realm.build_state)"
+	if ! service.data.realm_update_state "$state_file" "$new_state"; then
+		internal.logger.error "${FUNCNAME[0]}: failed to update realm state"
+		return 1
+	fi
+	return 0
+}
+
+function _service.realm.init_state() {
+	local state_dir state_file
+	state_file="$1"
+	state_dir="$2"
+
+	if [ ! -d "${state_dir}" ]; then
+		mkdir -p "$state_dir" || return 1
+	fi
+
+	if ! touch "$state_file" || ! lib.json.write_empty "$state_file"; then
+		internal.logger.error "${FUNCNAME[0]}: failed to init realm state"
+	fi
+	return 0
+}
+
+function _service.realm.build_state() {
+	local -a args=(
+		--arg uuid "${REALM[UUID]}"
+		--arg name "${REALM[NAME]}"
+		--arg status "${REALM[STATUS]}"
+		--arg owner_username "${REALM[OWNER_USERNAME]}"
+		--argjson owner_uid "${REALM[OWNER_UID]:-null}"
+		--arg subuid "${REALM[SUBUID]}"
+		--arg subgid "${REALM[SUBGID]}"
+		--arg subuid_range "${REALM[SUBUID_RANGE]}"
+		--arg subgid_range "${REALM[SUBGID_RANGE]}"
+		--arg helper_host_pid "${REALM[HELPER_HOST_PID]}"
+		--arg host_pid "${REALM[HOST_PID]}"
+		--arg image_name "${REALM[IMAGE_NAME]}"
+		--arg image_uuid "${REALM[IMAGE_UUID]}"
+		--arg image_path "${REALM[IMAGE_PATH]}"
+		--arg lower "${REALM[OVERLAY_LOWER]}"
+		--arg upper "${REALM[OVERLAY_UPPER]}"
+		--arg work "${REALM[OVERLAY_WORK]}"
+		--arg merged "${REALM[OVERLAY_MERGED]}"
+		--arg mount_opts "${REALM[MOUNT_OPTS]}"
+		--arg network "${REALM[NETWORK]}"
+		--arg subnet_range "${REALM[SUBNET_RANGE]}"
+		--arg ipv4 "${REALM[IPv4]}"
+		--arg host_egress_iface "${REALM[HOST_EGRESS_IFACE]}"
+		--arg hostname "${REALM[HOSTNAME]}"
+		--argjson exil_mode "${REALM[EXIL_MODE]:-0}"
+		--arg entrypoint_cmd "${REALM[ENTRYPOINT_CMD]}"
+		'[{
+			uuid: $uuid,
+			name: $name,
+			status: $status,
+			owner: {
+				username: $owner_username,
+				uid: $owner_uid
+			},
+			idmapping: {
+				subuid: $subuid,
+				subgid: $subgid,
+				subuid_range: $subuid_range,
+				subgid_range: $subgid_range
+			},
+			pids: {
+				helper_host_pid: $helper_host_pid,
+				host_pid: $host_pid
+			},
+			image: {
+				name: $image_name,
+				uuid: $image_uuid,
+				path: $image_path
+			},
+			overlayfs: {
+				lower_dir: $lower,
+				upper_dir: $upper,
+				work_dir: $work,
+				merged: $merged,
+				mount_opts: $mount_opts
+			},
+			network: {
+				name: $network,
+				subnet_range: $subnet_range,
+				ipv4: $ipv4,
+				host_egress_iface: $host_egress_iface
+			},
+			hostname: $hostname,
+			exil_mode: ($exil_mode == 1),
+			entrypoint_cmd: $entrypoint_cmd
+		}]'
+	)
+	lib.json.build_obj "${args[@]}"
+	return $?
+}

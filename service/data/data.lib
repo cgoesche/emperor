@@ -12,7 +12,9 @@ function service.data.image_store_update_inventory() {
 	local hash="${IMAGE[HASH]}"
 	sum_file="${IMAGE[CHECKSUM_FILE]}"
 
+	# TODO: the data service shouldnt be responsible for this, come on now Chris
 	old_inv="$(_service.image.get_image_store_inventory_file)"
+	
 	new_inv="${EMPEROR_TEMP_DIR}/new_inventory.json"
 	touch "$new_inv"
 
@@ -36,6 +38,18 @@ function service.data.image_store_update_inventory() {
 
 	if ! mv "$new_inv" "$old_inv"; then
 		internal.logger.error "${FUNCNAME[0]}: failed to update inventory"
+		return 1
+	fi
+	return 0
+}
+
+function service.data.realm_update_state() {
+	local state_file obj
+	state_file="$1"
+	obj="$2"
+
+	if ! lib.json.update_array "$obj" "$state_file"; then
+		internal.logger.error "${FUNCNAME[0]}: failed to write new realm state"
 		return 1
 	fi
 	return 0

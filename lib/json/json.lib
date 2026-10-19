@@ -9,6 +9,12 @@ function lib.json.write_empty() {
 	return $?
 }
 
+function lib.json.build_obj() {
+	local out
+	out=$(jq -n "$@") || return 1
+	printf '%s\n' "$out"
+}
+
 function lib.json.get_object_from_val_in_key() {
 	local file val key res
 	file="$1"
@@ -51,5 +57,14 @@ function lib.json.add_obj_to_array() {
 		# Add to a nested array
 		jq --arg arr "$arr" --argjson obj "$obj" '.[$arr] += $obj' "$orig" >"$target"
 	fi
+	return $?
+}
+
+function lib.json.update_array() {
+	local obj arr
+	obj="$1"
+	arr="$2"
+	
+	jq -n --argjson obj "$obj" '$obj' > "$arr"
 	return $?
 }

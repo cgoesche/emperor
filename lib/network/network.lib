@@ -2,10 +2,16 @@ function lib.network.get_hostname() {
 	# Due to the way how modern distros are setup,
 	# it is unlikely that the nodename field in the
 	# utsname struct returned by uname(2) is empty.
-	# 
+	#
 	# However, if nothing sets the hostname, the
 	# default in "CONFIG_DEFAULT_HOSTNAME" will be
 	# used ( normally "(none)" ).
 	uname -n
 	return 0
+}
+
+function lib.network.pasta_config_net() {
+	local pid
+	pid="$1"
+	command pasta --config-net "$pid"
 }

@@ -3,6 +3,8 @@
 function service.realm.import() {
 	_SERVICE_REALM_EXPORTED="1"
 	source ${EMPEROR_SRC_DIR}/service/realm/realm.lib
+	source ${EMPEROR_SRC_DIR}/service/realm/state.lib
+	source ${EMPEROR_SRC_DIR}/service/realm/helpers.lib
 }
 
 service.realm.import

@@ -109,7 +109,7 @@ function _cmd.create.realm.parser() {
 			continue
 			;;
 		'-i' | '--image')
-			service.realm.set_image "$2"
+			service.realm.set_image_ref "$2"
 			shift 2
 			continue
 			;;
@@ -130,8 +130,8 @@ function _cmd.create.realm.parser() {
 		esac
 	done
 
-	if [ -z "${REALM[IMAGE]}" ]; then
-		internal.logger.panic "no image specified"
+	if [ -z "${REALM[IMAGE_REF]}" ]; then
+		internal.logger.panic "no image reference specified (name or UUID)"
 	fi
 
 	# Accessing permutated arguments
@@ -144,8 +144,27 @@ function _cmd.create.realm.parser() {
 		shift 1
 		service.realm.set_entrypoint_cmd "$*"
 	else
+		# TODO: Cant have the same name as another realm
 		service.realm.set_name "${args[0]}"
 	fi
+
+	# Set image variables
+	# TODO: This has to go in a dedicated file
+	rc=0
+	if ! image_name="$(service.image.ref_to_key_val "${REALM[IMAGE_REF]}" "name")"; then
+		rc=$?
+	fi
+	service.realm.set_image_name "$image_name"
+
+	if ! image_uuid="$(service.image.ref_to_key_val "${REALM[IMAGE_REF]}" "uuid")"; then
+		rc=$?
+	fi
+	service.realm.set_image_uuid "$image_uuid"
+
+	if ! image_path="$(service.image.ref_to_key_val "${REALM[IMAGE_REF]}" "path")"; then
+		rc=$?
+	fi
+	service.realm.set_image_path "$image_path"
 
 	return "$rc"
 }
@@ -156,19 +175,25 @@ function _cmd.create.realm.handler() {
 	service.realm.init
 
 	if ! _cmd.create.realm.parser "$@"; then
+		# TODO: Thats sloppy bro
+		internal.logger.error "failed to parse"
 		return $?
 	fi
 
-	service.realm.prepare
-	if ! service.image.prepare "${REALM[IMAGE]}"; then
+	# Check if an image has been found
+	if [ -z "${REALM[IMAGE_PATH]}" ]; then
+		internal.logger.info "could not find image with reference '${REALM[IMAGE_REF]}'"
+		# TODO: Add a usage() function for the subcommand
+		# Maybe move the different handlers and parsers to their own
+		# files too ? cmd/create/import.create -> root, realm, network, image
+		# cmd/root then imports cmd/create/import.create
 		internal.logger.error "Please build an image first, see 'emperor create image --help'"
 		return 1
 	fi
 
-	#echo "Realm:"
-	#for k in "${!REALM[@]}"; do
-	#	echo "$k: ${REALM[$k]}"
-	#done
+	service.realm.prepare
+	service.realm.stage
+	service.realm.invade
 
 	return 0
 }
@@ -195,11 +220,10 @@ function _cmd.create.image.handler() {
 	if ! service.data.image_store_update_inventory; then
 		return 1
 	fi
+	internal.logger.info "image store inventory updated successfully."
 
-	echo "Image:"
-	for k in "${!IMAGE[@]}"; do
-		echo "$k: ${IMAGE[$k]}"
-	done
+	echo "New image has been created:"
+	service.image.print_info
 
 	return 0
 }

@@ -17,7 +17,7 @@ function main() {
 	local exit_code
 	exit_code=0
 
-	internal.config.check_dirs
+	internal.config.init_dirs
 
 	if [ "${#@}" == 0 ]; then
 		internal.logger.panic "insufficient arguments, see --help"

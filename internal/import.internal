@@ -1,7 +1,7 @@
 function import.internal() {
 	source ${EMPEROR_SRC_DIR}/internal/variables
-	source ${EMPEROR_SRC_DIR}/internal/config
 	source ${EMPEROR_SRC_DIR}/internal/logger/import.logger
-}
+	source ${EMPEROR_SRC_DIR}/internal/config
+	}
 
 import.internal

@@ -1,0 +1,8 @@
+[ "${_LIB_NAMESPACE_EXPORTED}" == 1 ] && return 0
+
+function lib.namespace.import() {
+	_LIB_NAMESPACE_EXPORTED="1"
+	source ${EMPEROR_SRC_DIR}/lib/namespace/namespace.lib
+}
+
+lib.namespace.import

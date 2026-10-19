@@ -1,4 +1,55 @@
-function service.network.hello() {
-	echo "Hello"
+function service.network.setup_realm_helper() {
+	local net net_type pid
+
+	net="${REALM[NETWORK]}"
+	# Ok, are we joining a network or setting
+	# up a simple network tunnel ?
+	if [ -z "$net" ]; then
+		net_type="simple"
+	fi
+
+	# TODO: implement service.network.get_net_type
+
+	case "$net_type" in
+	'simple')
+		pid=$(_service.network.spawn_simple_net_helper)
+		;;
+	*)
+		internal.logger.panic "${FUNCNAME[0]}: invalid network type '$net_type'"
+		;;
+	esac
+
+	if [ -z "$pid" ]; then
+		internal.logger.panic "${FUNCNAME[0]}: failed to spawn namespace helper"
+	fi
+
+	service.realm.set_helper_pid "$pid"
+
+	# Configure the network tap device in the netns
+	if ! lib.network.pasta_config_net "$(service.realm.get_helper_pid)"; then
+		internal.logger.panic "${FUNCNAME[0]}: failed to setup tap device"
+	fi
+
+	service.realm.update_state "${REALM[UUID]}"
+
+	return 0
+}
+
+function _service.network.spawn_simple_net_helper() {
+	local -a args
+	args=(
+		--user
+		--net
+		--map-users "0:${REALM[OWNER_UID]}:1"
+		--map-users "1:${REALM[SUBUID]}:${REALM[SUBUID_RANGE]}"
+		--map-groups "0:${REALM[OWNER_UID]}:1"
+		--map-groups "1:${REALM[SUBGID]}:${REALM[SUBGID_RANGE]}"
+	)
+	service.realm.spawn_ns_helper "${args[@]}"
+	return
+}
+
+function _service.network.get_netns_info() {
+	# TODO: should get information about all network interfaces
 	return 0
 }

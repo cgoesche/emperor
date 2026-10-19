@@ -2,15 +2,39 @@
 
 function internal.variables.import() {
 	_INTERNAL_VARIABLES_EXPORTED="1"
-	
-	declare -rg _LOCAL_SHARE="${HOME}/.local/share"
 
-	declare -rg EMPEROR_TEMP_DIR="${_LOCAL_SHARE}/tmp"
-	declare -rg EMPEROR_BUILD_DIR="${EMPEROR_TEMP_DIR}/build"
-	declare -rg EMPEROR_DATASTORE_DIR="${_LOCAL_SHARE}/emperor/store"
-	declare -rg EMPEROR_STATE_DIR="${XDG_RUNTIME_DIR}/emperor"
-	declare -rg EMPEROR_ASSETS_DIR="${EMPEROR_SRC_DIR}/assets"
-	declare -rg EMPEROR_MKOSI_DIR="${EMPEROR_ASSETS_DIR}/mkosi"
+	# Host filesystem locations
+	declare -rxg EMPEROR_LOCAL_SHARE="${HOME}/.local/share/emperor"
+	declare -rxg EMPEROR_LOCAL_STATE="${HOME}/.local/state/emperor"
+	declare -rxg EMPEROR_TEMP_DIR="${EMPEROR_LOCAL_SHARE}/tmp"
+
+	if [ -n "${XDG_RUNTIME_DIR}" ]; then
+		declare -rxg EMPEROR_RUNTIME_DIR="${XDG_RUNTIME_DIR}/emperor"
+	else
+		declare -rxg EMPEROR_RUNTIME_DIR="${EMPEROR_LOCAL_STATE}/run"
+	fi
+
+	declare -rxg EMPEROR_BUILD_DIR="${EMPEROR_TEMP_DIR}/build"
+	declare -rxg EMPEROR_FILESYSTEMS_DIR="${EMPEROR_LOCAL_SHARE}/filesystems"
+	declare -rxg EMPEROR_IMAGES_FS_DIR="${EMPEROR_FILESYSTEMS_DIR}/images"
+	declare -rxg EMPEROR_REALMS_FS_DIR="${EMPEROR_FILESYSTEMS_DIR}/realms"
+	declare -rxg EMPEROR_DATASTORE_DIR="${EMPEROR_LOCAL_SHARE}/store"
+	declare -rxg EMPEROR_IMAGESTORE_DIR="${EMPEROR_LOCAL_SHARE}/store/images"
+	declare -rxg EMPEROR_REALMS_STATE_DIR="${EMPEROR_RUNTIME_DIR}/realms"
+
+	# Source directories
+	declare -rxg EMPEROR_ASSETS_DIR="${EMPEROR_SRC_DIR}/assets"
+	declare -rxg EMPEROR_MKOSI_DIR="${EMPEROR_ASSETS_DIR}/mkosi"
+
+	# File/dir names
+	declare -rxg EMPEROR_IMAGESTORE_INVENTORY_FILENAME="inventory.json"
+	declare -rxg EMPEROR_IMAGE_DEFAULT_ROOTFS_DIRNAME="rootfs"
+	declare -rxg EMPEROR_DEFAULT_REALM_STATE_FILENAME="state.json"
+	declare -rxg EMPEROR_DEFAULT_REALM_SETUP_SCRIPT="${EMPEROR_ASSETS_DIR}/scripts/invader.sh"
+
+	# This is for unshare(1)
+	# FIXME: Probably not all of these are needed
+	declare -xg EMPEROR_WHITELIST_ENV="EMPEROR_LOCAL_SHARE,EMPEROR_LOCAL_STATE,EMPEROR_TEMP_DIR,EMPEROR_RUNTIME_DIR,EMPEROR_BUILD_DIR,EMPEROR_FILESYSTEMS_DIR,EMPEROR_IMAGES_FS_DIR,EMPEROR_REALMS_FS_DIR,EMPEROR_DATASTORE_DIR,EMPEROR_IMAGESTORE_DIR,EMPEROR_REALMS_STATE_DIR,EMPEROR_ASSETS_DIR,EMPEROR_MKOSI_DIR,EMPEROR_DEFAULT_REALM_SETUP_SCRIPT,EMPEROR_IMAGESTORE_INVENTORY_FILENAME,EMPEROR_IMAGE_DEFAULT_ROOTFS_DIRNAME,EMPEROR_DEFAULT_REALM_STATE_FILENAME,REALM_DUMP"
 }
 
 internal.variables.import

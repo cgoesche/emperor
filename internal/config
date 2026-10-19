@@ -6,8 +6,33 @@ function internal.config.import() {
 
 internal.config.import
 
-function internal.config.check_dirs() {
-	[ ! -d "${EMPEROR_TEMP_DIR}" ] && mkdir -p "${EMPEROR_TEMP_DIR}"
-	[ ! -d "${EMPEROR_BUILD_DIR}" ] && mkdir -p "${EMPEROR_BUILD_DIR}"
-	[ ! -d "${EMPEROR_STATE_DIR}" ] && mkdir -p "${EMPEROR_STATE_DIR}"
+function internal.config.init_dirs() {
+	local dir
+	local -a dirs=(
+		"$EMPEROR_LOCAL_SHARE"
+		"$EMPEROR_LOCAL_STATE"
+		"$EMPEROR_TEMP_DIR"
+		"$EMPEROR_RUNTIME_DIR"
+		"$EMPEROR_BUILD_DIR"
+		"$EMPEROR_FILESYSTEMS_DIR"
+		"$EMPEROR_IMAGES_FS_DIR"
+		"$EMPEROR_REALMS_FS_DIR"
+		"$EMPEROR_DATASTORE_DIR"
+		"$EMPEROR_IMAGESTORE_DIR"
+		"$EMPEROR_REALMS_STATE_DIR"
+	)
+
+	for dir in "${dirs[@]}"; do
+		if [[ -z $dir ]]; then
+			internal.logger.error "${FUNCNAME[0]}: empty directory path"
+			return 1
+		fi
+		mkdir -p -- "$dir" || {
+			internal.logger.error "${FUNCNAME[0]}: failed to create '$dir'"
+			return 1
+		}
+	done
+
+	# runtime and state data may contain sockets, PIDs and namespace files
+	chmod 700 -- "$EMPEROR_RUNTIME_DIR" "$EMPEROR_REALMS_STATE_DIR"
 }
